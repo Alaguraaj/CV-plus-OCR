@@ -8,68 +8,60 @@ from PIL import Image, ImageDraw
 face_cascade = cv.CascadeClassifier('haarcascade_frontalface_default.xml')
 
 # processing zip
-InPath = "small_img.zip"
+InPath = "small_img2.zip"
 OutPath = "images"
 
 
 # Unzip and get names and path's to extracted images
 
-def unzip(InPath=InPath, OutPath=OutPath):
-    with ZipFile(InPath, 'r') as zipObj:
-        zipObj.extractall(OutPath)
 
-
-def getImageNames(InPath=InPath):
+def generateNamePathDict(InPath=InPath, OutPath=OutPath):
     with ZipFile(InPath, "r") as zipObj:
+        zipObj.extractall(OutPath)
         names = zipObj.namelist()
-        return names
+    paths = [OutPath + "/" + name for name in names]
+    namePath = {name: path for name in names for path in paths}
+    return namePath
 
 
-def generatePath(OutPath=OutPath, names=getImageNames()):
-    path = [OutPath + "/" + name for name in names]
-    return path
+# extract Text from pics
+def preparationToOCR(items=generateNamePathDict()):
+    objects = {key: Image.open(items[key]).convert("1") for key in items.keys()}
 
-
-def preparationToOCR(path=generatePath(), names=getImageNames()):
-    objects = {}
-    for i in range(len(names)):
-        objects = {names[i]: Image.open(path[i]).convert("1")}
     return objects
 
 
 def getTextFromPage(items=preparationToOCR()):
-    parsedPages = {}
-    for key in preparationToCV().keys():
-        parsedPages = {
-            key: pytesseract.image_to_string(preparationToOCR()[key])}
+    parsedPages = {key: pytesseract.image_to_string(items()[key]) for key in items.keys()}
+
     return parsedPages
 
-
-def preparationToCV(path=generatePath(), names=getImageNames()):
-    object = {}
-    for i in range(len(names)):
-        img = cv.imread(path[i])
-        object = {names[i]: cv.cvtColor(img, cv.COLOR_BGR2GRAY)}
-        return object
+    # extract faces
 
 
-def getFacesFromPage(items=preparationToCV(), images=preparationToOCR()):
-    faces = {}
-    for key in preparationToCV().keys():
-        faces = {key: face_cascade.detectMultiScale(preparationToCV()[key])}
+def preparationToCV(items=generateNamePathDict()):
+    object = {key: cv.cvtColor(cv.imread(items[key]), cv.COLOR_BGR2GRAY) for key in items.keys()}
 
-    def show_rects(items=preparationToCV(), images=preparationToOCR()):
+    return object
+
+
+def getFacesFromPage(items=preparationToCV()):
+    faces = {key: face_cascade.detectMultiScale(items[key]) for key in items.keys()}
+
+    def show_rects(items=generateNamePathDict()):
         headsFromImage = {}
-        for key in preparationToCV().keys():
-            pil_img = preparationToOCR()[key].convert("RGB")
-            drawing = ImageDraw.Draw(pil_img)
-            for x, y, w, h in faces[key]:
-                drawing.rectangle((x, y, x + w, y + h), outline="red")
-                headsFromImage = {key: pil_img}
+        for key in items.keys():
+            with Image.open(items[key]).convert("RGB") as pil_img:
+                drawing = ImageDraw.Draw(pil_img)
+                for x, y, w, h in faces[key]:
+                    drawing.rectangle((x, y, x + w, y + h), outline="red")
+                    headsFromImage.update({key: pil_img})
         return headsFromImage
 
     return show_rects()
 
 
-for val in getFacesFromPage().values():
-    val.show()
+if __name__ == '__main__':
+    for pic in getFacesFromPage().values():
+        pic.show()
+#Same pic shows, need to investigate!!!!!!!!
