@@ -102,3 +102,4 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+/small_img2.zip
