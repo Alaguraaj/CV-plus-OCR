@@ -2,13 +2,13 @@ from zipfile import ZipFile
 
 import cv2 as cv
 import pytesseract
-from PIL import Image, ImageDraw
+from PIL import Image
 
 # loading the face detection classifier
 face_cascade = cv.CascadeClassifier('haarcascade_frontalface_default.xml')
 
 # processing zip
-InPath = "small_img2.zip"
+InPath = "small_img.zip"
 OutPath = "images"
 
 
@@ -18,7 +18,7 @@ OutPath = "images"
 def generateNamePathDict(InPath=InPath, OutPath=OutPath):
     namePath = {}
     with ZipFile(InPath, "r") as zipObj:
-        # zipObj.extractall(OutPath)
+        zipObj.extractall(OutPath)
         names = zipObj.namelist()
         paths = [OutPath + "/" + name for name in names]
         for i in range(len(names)):
@@ -35,7 +35,7 @@ def preparationToOCR(items=generateNamePathDict()):
 
 
 def getTextFromPage(items=preparationToOCR()):
-    parsedPages = {key: pytesseract.image_to_string(items()[key]) for key in items.keys()}
+    parsedPages = {key: pytesseract.image_to_string(items[key]) for key in items.keys()}
 
     return parsedPages
 
@@ -47,21 +47,43 @@ def preparationToCV(items=generateNamePathDict()):
 
 
 def getFacesFromPage(items=preparationToCV()):
-    faces = {key: face_cascade.detectMultiScale(items[key]) for key in items.keys()}
+    faces = {key: face_cascade.detectMultiScale(items[key],
+                                 scaleFactor=1.30,
+                                 minNeighbors=5,
+                                 minSize=(50, 50)) for key in items.keys()}
+#was used to test image recognition, no longer neded
+    # def show_rects(items=generateNamePathDict()):
+    #     headsFromImage = {}
+    #     for key in items.keys():
+    #         with Image.open(items[key]).convert("RGB") as pil_img:
+    #             drawing = ImageDraw.Draw(pil_img)
+    #             for x, y, w, h in faces[key]:
+    #                 drawing.rectangle((x, y, x + w, y + h), outline="red")
+    #                 headsFromImage.update({key: pil_img})
+    #     return headsFromImage
 
-    def show_rects(items=generateNamePathDict()):
-        headsFromImage = {}
+    def crop_faces(items = generateNamePathDict()):
+        facesFromImage = {}
         for key in items.keys():
             with Image.open(items[key]).convert("RGB") as pil_img:
-                drawing = ImageDraw.Draw(pil_img)
                 for x, y, w, h in faces[key]:
-                    drawing.rectangle((x, y, x + w, y + h), outline="red")
-                    headsFromImage.update({key: pil_img})
-        return headsFromImage
+                    listFaces = [pil_img.crop((x, y, x + w, y + h)) for x, y, w, h in faces[key]]
+                facesFromImage[key]= listFaces
+        return facesFromImage
+    # return show_rects()
+    return crop_faces()
 
-    return show_rects()
 
+
+
+def matchWordandFaces(word, text = getTextFromPage(), faces = getFacesFromPage()):
+    for key in text.keys():
+        if word in text[key]:
+            result = {key:getFacesFromPage()[key]}
+        else:result = f"{word} does not match any of pages"
+    return result
 
 if __name__ == '__main__':
-    for pic in getFacesFromPage().values():
-        pic.show()
+    for val in getFacesFromPage().values():
+        for i in range(len(val)):
+            val[i].show()
