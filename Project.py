@@ -16,12 +16,15 @@ OutPath = "images"
 
 
 def generateNamePathDict(InPath=InPath, OutPath=OutPath):
+    namePath = {}
     with ZipFile(InPath, "r") as zipObj:
-        zipObj.extractall(OutPath)
+        # zipObj.extractall(OutPath)
         names = zipObj.namelist()
-    paths = [OutPath + "/" + name for name in names]
-    namePath = {name: path for name in names for path in paths}
+        paths = [OutPath + "/" + name for name in names]
+        for i in range(len(names)):
+            namePath.update({names[i]: paths[i]})
     return namePath
+
 
 
 # extract Text from pics
@@ -36,9 +39,7 @@ def getTextFromPage(items=preparationToOCR()):
 
     return parsedPages
 
-    # extract faces
-
-
+# extract faces
 def preparationToCV(items=generateNamePathDict()):
     object = {key: cv.cvtColor(cv.imread(items[key]), cv.COLOR_BGR2GRAY) for key in items.keys()}
 
@@ -64,4 +65,3 @@ def getFacesFromPage(items=preparationToCV()):
 if __name__ == '__main__':
     for pic in getFacesFromPage().values():
         pic.show()
-#Same pic shows, need to investigate!!!!!!!!
