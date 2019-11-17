@@ -1,6 +1,7 @@
 from zipfile import ZipFile
 
 import cv2 as cv
+import numpy as np
 import pytesseract
 from PIL import Image
 
@@ -15,7 +16,7 @@ OutPath = "images"
 # Unzip and get names and path's to extracted images
 
 
-def generateNamePathDict(InPath=InPath, OutPath=OutPath):
+def generate_name_path_dict(InPath=InPath, OutPath=OutPath):
     namePath = {}
     with ZipFile(InPath, "r") as zipObj:
         zipObj.extractall(OutPath)
@@ -26,32 +27,51 @@ def generateNamePathDict(InPath=InPath, OutPath=OutPath):
     return namePath
 
 
+name_path = generate_name_path_dict()
+
 
 # extract Text from pics
-def preparationToOCR(items=generateNamePathDict()):
+def preparation_to_OCR(items=name_path):
     objects = {key: Image.open(items[key]).convert("1") for key in items.keys()}
 
     return objects
 
 
-def getTextFromPage(items=preparationToOCR()):
-    parsedPages = {key: pytesseract.image_to_string(items[key]) for key in items.keys()}
+ocr = preparation_to_OCR()
 
-    return parsedPages
+
+def get_text_from_page(items=ocr):
+    parsed_pages = {key: pytesseract.image_to_string(items[key]).replace('\n', '') for key in items.keys()}
+
+    return parsed_pages
+
+
+text = get_text_from_page()
+
+
+def match_word_and_faces(word, texts=text):
+    result = []
+    for k in texts.keys():
+        if word in texts[k]:
+            result.append(k)
+
+    return result
+
 
 # extract faces
-def preparationToCV(items=generateNamePathDict()):
-    object = {key: cv.cvtColor(cv.imread(items[key]), cv.COLOR_BGR2GRAY) for key in items.keys()}
+def preparation_to_cv(keys, items=name_path):
+    images = {k: cv.cvtColor(cv.imread(items[k]), cv.COLOR_BGR2GRAY) for k in keys}
 
-    return object
+    return images
 
 
-def getFacesFromPage(items=preparationToCV()):
-    faces = {key: face_cascade.detectMultiScale(items[key],
-                                 scaleFactor=1.30,
-                                 minNeighbors=5,
-                                 minSize=(50, 50)) for key in items.keys()}
-#was used to test image recognition, no longer neded
+def get_faces_from_page(items):
+    faces = {k: face_cascade.detectMultiScale(items[k],
+                                                scaleFactor=1.30,
+                                                minNeighbors=5,
+                                                minSize=(50, 50)) for k in items.keys()}
+
+    # was used to test image recognition, no longer neded
     # def show_rects(items=generateNamePathDict()):
     #     headsFromImage = {}
     #     for key in items.keys():
@@ -61,29 +81,49 @@ def getFacesFromPage(items=preparationToCV()):
     #                 drawing.rectangle((x, y, x + w, y + h), outline="red")
     #                 headsFromImage.update({key: pil_img})
     #     return headsFromImage
-
-    def crop_faces(items = generateNamePathDict()):
-        facesFromImage = {}
-        for key in items.keys():
-            with Image.open(items[key]).convert("RGB") as pil_img:
-                for x, y, w, h in faces[key]:
-                    listFaces = [pil_img.crop((x, y, x + w, y + h)) for x, y, w, h in faces[key]]
-                facesFromImage[key]= listFaces
-        return facesFromImage
-    # return show_rects()
-    return crop_faces()
+    return faces
 
 
+def crop_faces(keys, faces, items=name_path):
+    faces_from_image = {}
+    for key in keys:
+        with Image.open(items[key]).convert("RGB") as pil_img:
+            listFaces = [pil_img.crop((x, y, x + w, y + h)) for x, y, w, h in faces[key]]
+        faces_from_image[key] = listFaces
+    return faces_from_image
 
 
-def matchWordandFaces(word, text = getTextFromPage(), faces = getFacesFromPage()):
-    for key in text.keys():
-        if word in text[key]:
-            result = {key:getFacesFromPage()[key]}
-        else:result = f"{word} does not match any of pages"
+def contact_sheet_results(items):
+    sheets = {}
+    for k in items.keys():
+        sheets[k] = Image.new(items[k][0].mode, (550, 110 * int(np.ceil(len(items[k]) / 5))))
+        x = 0
+        y = 0
+        for face in items[k]:
+            face.thumbnail((110, 110))
+            sheets[k].paste(face, (x, y))
+            if x + 110 == sheets[k].width:
+                x = 0
+                y = y + 110
+            else:
+                x = x + 110
+    return sheets
+
+
+def manager_func(word):
+    # preparation_to_OCR()
+    # get_text_from_page()
+    match = match_word_and_faces(word=word)
+    prepar = preparation_to_cv(keys=match)
+    heads = get_faces_from_page(prepar)
+    crop_face = crop_faces(keys=prepar, faces=heads)
+    result = contact_sheet_results(crop_face)
     return result
 
+
 if __name__ == '__main__':
-    for val in getFacesFromPage().values():
-        for i in range(len(val)):
-            val[i].show()
+
+    res = manager_func("a")
+    for k,v in res.items():
+        print(f"Resulf for page {k}")
+        v.show()
